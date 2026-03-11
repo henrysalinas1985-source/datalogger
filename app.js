@@ -371,13 +371,15 @@ document.addEventListener('DOMContentLoaded', () => {
     // === INSTRUMENTAL ===
     function createInstrumentRow(data = {}) {
         const div = document.createElement('div'); div.className = 'instrument-item';
+        // Normalize date for input[type=date]
+        const dateVal = formatDateForInput(data.date);
         div.innerHTML = `
             <button type="button" class="remove-instrument">×</button>
             <div class="field-group full-width"><label>Nombre del Instrumental</label><input type="text" class="inst-name" list="instrumentsHistory" value="${escapeHtml(data.name || '')}"></div>
             <div class="field-group"><label>Marca</label><input type="text" class="inst-brand" value="${escapeHtml(data.brand || '')}"></div>
             <div class="field-group"><label>Modelo</label><input type="text" class="inst-model" value="${escapeHtml(data.model || '')}"></div>
             <div class="field-group"><label>N° Serie</label><input type="text" class="inst-serie" value="${escapeHtml(data.serie || '')}"></div>
-            <div class="field-group"><label>Últ. Calibración</label><input type="text" class="inst-date" placeholder="DD/MM/YYYY" value="${escapeHtml(data.date || '')}"></div>
+            <div class="field-group"><label>Últ. Calibración</label><input type="date" class="inst-date" value="${dateVal}"></div>
         `;
         div.querySelector('.remove-instrument').onclick = () => div.remove();
         instrumentsContainer.appendChild(div);
@@ -870,7 +872,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function formatDate(s) {
         if (!s) return '';
-        return new Date(s + 'T00:00:00').toLocaleDateString('es-ES');
+        const d = new Date(s + 'T12:00:00'); // Evitar problemas de zona horaria
+        if (isNaN(d.getTime())) return s;
+        return d.toLocaleDateString('es-ES');
+    }
+
+    function formatDateForInput(s) {
+        if (!s) return '';
+        if (s instanceof Date) return s.toISOString().split('T')[0];
+        // Si ya está en YYYY-MM-DD
+        if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+        // Si viene un string largo de Date (como en el bug)
+        const d = new Date(s);
+        if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+        return '';
     }
 
     async function extractInstrumentsFromExcel(blob) {
@@ -903,11 +918,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 const brand = String(worksheet.getCell(`B${rowIdx}`).value || '').trim();
                 const model = String(worksheet.getCell(`D${rowIdx}`).value || '').trim();
                 const serie = String(worksheet.getCell(`E${rowIdx}`).value || '').trim();
-                const date = String(worksheet.getCell(`F${rowIdx}`).value || '').trim();
+                const dateCell = worksheet.getCell(`F${rowIdx}`).value;
+                let dateStr = '';
+                if (dateCell instanceof Date) {
+                    dateStr = dateCell.toISOString().split('T')[0];
+                } else {
+                    dateStr = String(dateCell || '').trim();
+                }
 
                 // Solo si tiene algo de validez (excluir "N/A" solitarios sin nombre real)
                 if (instName.length > 0 && !instName.startsWith('N/A')) {
-                    instruments.push({ name: instName, brand, model, serie, date });
+                    instruments.push({ name: instName, brand, model, serie, date: dateStr });
                 }
             }
             return instruments;
