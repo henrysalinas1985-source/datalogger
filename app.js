@@ -19,19 +19,18 @@ document.addEventListener('DOMContentLoaded', () => {
         { code: '8.1.6', label: 'Fuentes de alimentación', row: 29 },
     ];
 
-    // 8.2.1 Características del termómetro patrón — valores en col I, filas 31-34
+    // 8.2.1 Características del termómetro patrón — valores fijos en col I, filas 31-34
     const SCHEMA_821 = [
-        { label: 'Error permitido', row: 30 },
-        { label: 'Incertidumbre de calibración (Up) (Hasta -70°C)', row: 31 },
-        { label: 'Incertidumbre de calibración (Up) (-20.10°C)', row: 32 },
-        { label: 'Incertidumbre de calibración (Up) (29°C)', row: 33 },
-        { label: 'Resolución (rp)', row: 34 },
+        { label: 'Incertidumbre de calibración (Up) (Hasta -70°C)', row: 31, value: 0.18 },
+        { label: 'Incertidumbre de calibración (Up) (-20.10°C)', row: 32, value: 0.14 },
+        { label: 'Incertidumbre de calibración (Up) (29°C)', row: 33, value: 0.11 },
+        { label: 'Resolución (rp)', row: 34, value: 0.01 },
     ];
 
-    // 8.2.2 Características del termómetro a calibrar — col I, filas 38/40
+    // 8.2.2 Características del termómetro a calibrar — valores fijos en col I, filas 38/40
     const SCHEMA_822 = [
-        { label: 'Error pèrmitido', row: 38 },
-        { label: 'Resolución (rx)', row: 40 },
+        { label: 'Error permitido', row: 38, value: 3 },
+        { label: 'Resolución (rx)', row: 40, value: 2 },
     ];
 
     // Estado de Valoración — col B, filas 15-18
@@ -43,6 +42,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const DB_NAME = 'CalibracionesDB_v3';
     const DB_VERSION = 1;
+
+    // === UTILIDADES ===
+    function escapeHtml(str) {
+        const div = document.createElement('div');
+        div.appendChild(document.createTextNode(str));
+        return div.innerHTML;
+    }
+
+    function safeParseFloat(val) {
+        if (val === '' || val === null || val === undefined) return null;
+        const n = parseFloat(val);
+        return isNaN(n) ? null : n;
+    }
 
     // DOM
     const fileInput = document.getElementById('fileInput');
@@ -183,6 +195,120 @@ document.addEventListener('DOMContentLoaded', () => {
         if (confirm('¿Borrar datos cargados?')) { db.transaction('appData', 'readwrite').objectStore('appData').delete('lastExcel'); location.reload(); }
     });
 
+    // === BACKUP: EXPORTAR / IMPORTAR ===
+    function blobToBase64(blob) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+        });
+    }
+
+    function base64ToBlob(dataUrl) {
+        const [header, data] = dataUrl.split(',');
+        const mime = header.match(/:(.*?);/)[1];
+        const bytes = atob(data);
+        const arr = new Uint8Array(bytes.length);
+        for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+        return new Blob([arr], { type: mime });
+    }
+
+    document.getElementById('exportBackupBtn').addEventListener('click', async () => {
+        try {
+            const backup = { version: 1, exportDate: new Date().toISOString(), calibrations: {}, templates: [] };
+
+            // Exportar calibraciones
+            const calTx = db.transaction('calibrations', 'readonly');
+            const allCals = await new Promise(r => { const q = calTx.objectStore('calibrations').getAll(); q.onsuccess = () => r(q.result); });
+            for (const cal of allCals) {
+                const entry = { ...cal };
+                if (entry.certificate instanceof Blob) {
+                    entry._certBase64 = await blobToBase64(entry.certificate);
+                    delete entry.certificate;
+                }
+                backup.calibrations[cal.serie] = entry;
+            }
+
+            // Exportar plantillas
+            const tmplTx = db.transaction('templates', 'readonly');
+            const allTmpls = await new Promise(r => { const q = tmplTx.objectStore('templates').getAll(); q.onsuccess = () => r(q.result); });
+            for (const tmpl of allTmpls) {
+                const entry = { ...tmpl };
+                if (entry.blob instanceof Blob) {
+                    entry._blobBase64 = await blobToBase64(entry.blob);
+                    delete entry.blob;
+                }
+                backup.templates.push(entry);
+            }
+
+            const json = JSON.stringify(backup, null, 2);
+            const blob = new Blob([json], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `backup_calibraciones_${new Date().toISOString().slice(0, 10)}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            alert('✅ Backup exportado correctamente.');
+        } catch (err) {
+            console.error('Error al exportar:', err);
+            alert('Error al exportar: ' + err.message);
+        }
+    });
+
+    document.getElementById('importBackupBtn').addEventListener('click', () => {
+        document.getElementById('importBackupFile').click();
+    });
+
+    document.getElementById('importBackupFile').addEventListener('change', async e => {
+        const file = e.target.files[0];
+        if (!file) return;
+        try {
+            const text = await file.text();
+            const backup = JSON.parse(text);
+            if (!backup.version || !backup.calibrations) throw new Error('Formato de backup inválido');
+
+            const count = { cals: 0, tmpls: 0 };
+
+            // Importar calibraciones
+            const calTx = db.transaction('calibrations', 'readwrite');
+            const calStore = calTx.objectStore('calibrations');
+            for (const [serie, cal] of Object.entries(backup.calibrations)) {
+                const entry = { ...cal, serie };
+                if (entry._certBase64) {
+                    entry.certificate = base64ToBlob(entry._certBase64);
+                    delete entry._certBase64;
+                }
+                calStore.put(entry);
+                count.cals++;
+            }
+
+            // Importar plantillas
+            if (backup.templates && backup.templates.length > 0) {
+                const tmplTx = db.transaction('templates', 'readwrite');
+                const tmplStore = tmplTx.objectStore('templates');
+                for (const tmpl of backup.templates) {
+                    const entry = { ...tmpl };
+                    delete entry.id; // Dejar que autoIncrement asigne nuevo ID
+                    if (entry._blobBase64) {
+                        entry.blob = base64ToBlob(entry._blobBase64);
+                        delete entry._blobBase64;
+                    }
+                    tmplStore.add(entry);
+                    count.tmpls++;
+                }
+            }
+
+            alert(`✅ Backup importado: ${count.cals} calibraciones, ${count.tmpls} plantillas.`);
+            location.reload();
+        } catch (err) {
+            console.error('Error al importar:', err);
+            alert('Error al importar: ' + err.message);
+        }
+        e.target.value = ''; // Reset para permitir reimportar el mismo archivo
+    });
+
     // === TABLA ===
     async function renderTable() {
         if (!currentClinic || !allSheetsData[currentClinic]) return;
@@ -211,16 +337,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const displayName = cal?.editedName || (nombreKey ? row[nombreKey] : 'N/A');
             const displaySerie = cal?.editedSerie || serie;
+            const safeSerie = escapeHtml(serie);
+            const safeDisplayName = escapeHtml(String(displayName));
+            const safeDisplaySerie = escapeHtml(String(displaySerie));
 
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td>${displayName}</td>
-                <td>${displaySerie}</td>
+                <td>${safeDisplayName}</td>
+                <td>${safeDisplaySerie}</td>
                 <td>${cal ? formatDate(cal.date) : '<span style="color:#aaa">Sin registrar</span>'}</td>
-                <td>${cal?.technician || '-'}</td>
-                <td>${cal?.certificate ? `<button class="btn btn-small" onclick="window.viewCert('${serie}')">📄</button>` : '-'}</td>
-                <td><span class="status-badge ${status.class}">${status.text}</span></td>
-                <td><button class="btn btn-secondary btn-small" onclick="window.openEdit('${serie}')">📅 Registrar</button></td>
+                <td>${escapeHtml(cal?.technician || '-')}</td>
+                <td>${cal?.certificate ? `<button class="btn btn-small" data-action="viewCert" data-serie="${safeSerie}">📄</button>` : '-'}</td>
+                <td><span class="status-badge ${status.class}">${escapeHtml(status.text)}</span></td>
+                <td><button class="btn btn-secondary btn-small" data-action="openEdit" data-serie="${safeSerie}">📅 Registrar</button></td>
             `;
             equiposTableBody.appendChild(tr);
         });
@@ -244,11 +373,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const div = document.createElement('div'); div.className = 'instrument-item';
         div.innerHTML = `
             <button type="button" class="remove-instrument">×</button>
-            <div class="field-group full-width"><label>Nombre del Instrumental</label><input type="text" class="inst-name" list="instrumentsHistory" value="${data.name || ''}"></div>
-            <div class="field-group"><label>Marca</label><input type="text" class="inst-brand" value="${data.brand || ''}"></div>
-            <div class="field-group"><label>Modelo</label><input type="text" class="inst-model" value="${data.model || ''}"></div>
-            <div class="field-group"><label>N° Serie</label><input type="text" class="inst-serie" value="${data.serie || ''}"></div>
-            <div class="field-group"><label>Últ. Calibración</label><input type="text" class="inst-date" placeholder="DD/MM/YYYY" value="${data.date || ''}"></div>
+            <div class="field-group full-width"><label>Nombre del Instrumental</label><input type="text" class="inst-name" list="instrumentsHistory" value="${escapeHtml(data.name || '')}"></div>
+            <div class="field-group"><label>Marca</label><input type="text" class="inst-brand" value="${escapeHtml(data.brand || '')}"></div>
+            <div class="field-group"><label>Modelo</label><input type="text" class="inst-model" value="${escapeHtml(data.model || '')}"></div>
+            <div class="field-group"><label>N° Serie</label><input type="text" class="inst-serie" value="${escapeHtml(data.serie || '')}"></div>
+            <div class="field-group"><label>Últ. Calibración</label><input type="text" class="inst-date" placeholder="DD/MM/YYYY" value="${escapeHtml(data.date || '')}"></div>
         `;
         div.querySelector('.remove-instrument').onclick = () => div.remove();
         instrumentsContainer.appendChild(div);
@@ -290,12 +419,11 @@ document.addEventListener('DOMContentLoaded', () => {
         // ── Sección 8.2.1 ────────────────────────────────────────────────
         addSectionHeader(container, '8.2.1 Características del Termómetro Patrón');
         SCHEMA_821.forEach(item => {
-            const saved_val = saved[item.label] || '';
             const rowEl = document.createElement('div'); rowEl.className = 'inspection-row';
             rowEl.innerHTML = `
                 <div class="inspection-label">${item.label}</div>
-                <div class="inspection-options" data-label="${item.label}" data-type="numeric" data-row="${item.row}" data-col="${item.col}">
-                    <input type="number" step="any" class="inspection-measurement-input" value="${saved_val}" placeholder="°C">
+                <div class="inspection-options" style="justify-content:flex-end;padding:6px 12px;">
+                    <span style="color:var(--accent);font-weight:700;">${item.value} °C</span>
                 </div>`;
             container.appendChild(rowEl);
         });
@@ -303,12 +431,11 @@ document.addEventListener('DOMContentLoaded', () => {
         // ── Sección 8.2.2 ────────────────────────────────────────────────
         addSectionHeader(container, '8.2.2 Características del Termómetro a Calibrar');
         SCHEMA_822.forEach(item => {
-            const saved_val = saved[item.label] || '';
             const rowEl = document.createElement('div'); rowEl.className = 'inspection-row';
             rowEl.innerHTML = `
                 <div class="inspection-label">${item.label}</div>
-                <div class="inspection-options" data-label="${item.label}" data-type="numeric" data-row="${item.row}" data-col="${item.col}">
-                    <input type="number" step="any" class="inspection-measurement-input" value="${saved_val}" placeholder="°C">
+                <div class="inspection-options" style="justify-content:flex-end;padding:6px 12px;">
+                    <span style="color:var(--accent);font-weight:700;">${item.value} °C</span>
                 </div>`;
             container.appendChild(rowEl);
         });
@@ -356,28 +483,38 @@ document.addEventListener('DOMContentLoaded', () => {
         block.dataset.index = index;
         block.dataset.startRow = startRow;
         block.style.cssText = 'border:1px solid #3a3a5c;border-radius:8px;padding:12px;margin-bottom:12px;background:#1a1a2e;';
+        const eSensor = escapeHtml(saved.sensor || '');
+        const eUb1 = escapeHtml(saved.ub1 || '');
+        const eUb2 = escapeHtml(saved.ub2 || '');
+        const eUb3 = escapeHtml(saved.ub3 || '');
+        const eDl1 = escapeHtml(saved.dl1 || '');
+        const eDl2 = escapeHtml(saved.dl2 || '');
+        const eDl3 = escapeHtml(saved.dl3 || '');
+        const ePt1 = escapeHtml(saved.pt1 || '');
+        const ePt2 = escapeHtml(saved.pt2 || '');
+        const ePt3 = escapeHtml(saved.pt3 || '');
         block.innerHTML = `
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
                 <strong style="color:#7c83fd;">Sensor ${index + 1} (filas ${startRow}-${startRow + 2})</strong>
                 ${index > 0 ? `<button type="button" class="remove-sensor btn btn-small" style="background:#e53e3e">× Quitar</button>` : ''}
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
-                <div class="field-group"><label>N° Sensor / Serie (Col B)</label><input type="text" class="s-sensor" value="${saved.sensor || ''}"></div>
+                <div class="field-group"><label>N° Sensor / Serie (Col B)</label><input type="text" class="s-sensor" value="${eSensor}"></div>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:4px;background:#2a2a4a;padding:6px;border-radius:4px;">
-                <div class="field-group"><label>Ubicación 1 (A${startRow})</label><input type="text" class="s-ub1" value="${saved.ub1 || ''}"></div>
-                <div class="field-group"><label>DL L1 (H${startRow})</label><input type="number" step="any" class="s-dl1" value="${saved.dl1 || ''}"></div>
-                <div class="field-group"><label>Patrón L1 (I${startRow})</label><input type="number" step="any" class="s-pt1" value="${saved.pt1 || ''}"></div>
+                <div class="field-group"><label>Ubicación 1 (A${startRow})</label><input type="text" class="s-ub1" value="${eUb1}"></div>
+                <div class="field-group"><label>DL L1 (H${startRow})</label><input type="number" step="any" class="s-dl1" value="${eDl1}"></div>
+                <div class="field-group"><label>Patrón L1 (I${startRow})</label><input type="number" step="any" class="s-pt1" value="${ePt1}"></div>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:4px;background:#2a2a4a;padding:6px;border-radius:4px;">
-                <div class="field-group"><label>Ubicación 2 (A${startRow + 1})</label><input type="text" class="s-ub2" value="${saved.ub2 || ''}"></div>
-                <div class="field-group"><label>DL L2 (H${startRow + 1})</label><input type="number" step="any" class="s-dl2" value="${saved.dl2 || ''}"></div>
-                <div class="field-group"><label>Patrón L2 (I${startRow + 1})</label><input type="number" step="any" class="s-pt2" value="${saved.pt2 || ''}"></div>
+                <div class="field-group"><label>Ubicación 2 (A${startRow + 1})</label><input type="text" class="s-ub2" value="${eUb2}"></div>
+                <div class="field-group"><label>DL L2 (H${startRow + 1})</label><input type="number" step="any" class="s-dl2" value="${eDl2}"></div>
+                <div class="field-group"><label>Patrón L2 (I${startRow + 1})</label><input type="number" step="any" class="s-pt2" value="${ePt2}"></div>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;background:#2a2a4a;padding:6px;border-radius:4px;">
-                <div class="field-group"><label>Ubicación 3 (A${startRow + 2})</label><input type="text" class="s-ub3" value="${saved.ub3 || ''}"></div>
-                <div class="field-group"><label>DL L3 (H${startRow + 2})</label><input type="number" step="any" class="s-dl3" value="${saved.dl3 || ''}"></div>
-                <div class="field-group"><label>Patrón L3 (I${startRow + 2})</label><input type="number" step="any" class="s-pt3" value="${saved.pt3 || ''}"></div>
+                <div class="field-group"><label>Ubicación 3 (A${startRow + 2})</label><input type="text" class="s-ub3" value="${eUb3}"></div>
+                <div class="field-group"><label>DL L3 (H${startRow + 2})</label><input type="number" step="any" class="s-dl3" value="${eDl3}"></div>
+                <div class="field-group"><label>Patrón L3 (I${startRow + 2})</label><input type="number" step="any" class="s-pt3" value="${ePt3}"></div>
             </div>
         `;
         if (index > 0) block.querySelector('.remove-sensor').onclick = () => block.remove();
@@ -489,12 +626,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
         document.getElementById('closeModalBtn').onclick = () => editModal.classList.add('hidden');
 
-        window.viewCert = serie => {
-            const c = calibrationDates[serie];
-            if (c?.certificate) window.open(URL.createObjectURL(c.certificate), '_blank');
-        };
+        // Event delegation para botones de la tabla (reemplaza window.openEdit / window.viewCert)
+        equiposTableBody.addEventListener('click', e => {
+            const btn = e.target.closest('[data-action]');
+            if (!btn) return;
+            const serie = btn.dataset.serie;
+            if (btn.dataset.action === 'viewCert') {
+                const c = calibrationDates[serie];
+                if (c?.certificate) window.open(URL.createObjectURL(c.certificate), '_blank');
+            } else if (btn.dataset.action === 'openEdit') {
+                openEditModal(serie);
+            }
+        });
 
-        window.openEdit = serie => {
+        function openEditModal(serie) {
             selectedSerieForEdit = serie;
             const existing = calibrationDates[serie] || {};
             const eqRow = (allSheetsData[currentClinic] || [])
@@ -550,6 +695,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
             renderInspectionPoints(existing.inspections || {});
             editModal.classList.remove('hidden');
+        }
+
+        // Resetear equipo: borra la calibración de IndexedDB
+        document.getElementById('resetCalibBtn').onclick = async () => {
+            if (!selectedSerieForEdit) return;
+            if (!confirm(`¿Estás seguro de resetear todos los datos de calibración para "${selectedSerieForEdit}"? Esta acción no se puede deshacer.`)) return;
+            try {
+                const tx = db.transaction('calibrations', 'readwrite');
+                tx.objectStore('calibrations').delete(selectedSerieForEdit);
+                tx.oncomplete = () => {
+                    editModal.classList.add('hidden');
+                    renderTable();
+                    alert('Equipo reseteado correctamente.');
+                };
+            } catch (err) {
+                console.error(err);
+                alert('Error al resetear: ' + err.message);
+            }
         };
 
         saveCalibBtn.onclick = async () => {
@@ -663,16 +826,14 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        // ── 8.2.1 Características Patrón — col I, filas 31-34 ──
+        // ── 8.2.1 Características Patrón — col I, filas 31-34 (valores fijos) ──
         SCHEMA_821.forEach(item => {
-            const val = parseFloat((d.inspections || {})[item.label]) || '';
-            if (val !== '') ws.getCell(`I${item.row}`).value = val;
+            ws.getCell(`I${item.row}`).value = item.value;
         });
 
-        // ── 8.2.2 Características Calibrar — col I, filas 38/40 ──
+        // ── 8.2.2 Características Calibrar — col I, filas 38/40 (valores fijos) ──
         SCHEMA_822.forEach(item => {
-            const val = parseFloat((d.inspections || {})[item.label]) || '';
-            if (val !== '') ws.getCell(`I${item.row}`).value = val;
+            ws.getCell(`I${item.row}`).value = item.value;
         });
 
         // ── 8.2.3 Mediciones Multi-Sensor ──────────────────────────────────
@@ -687,13 +848,19 @@ document.addEventListener('DOMContentLoaded', () => {
             ws.getCell(`B${r}`).value = s.sensor || '';
 
             // Datalogger lecturas → col H (¡Era H, no C!)
-            ws.getCell(`H${r}`).value = parseFloat(s.dl1) || 0;
-            ws.getCell(`H${r + 1}`).value = parseFloat(s.dl2) || 0;
-            ws.getCell(`H${r + 2}`).value = parseFloat(s.dl3) || 0;
+            const dl1 = safeParseFloat(s.dl1);
+            const dl2 = safeParseFloat(s.dl2);
+            const dl3 = safeParseFloat(s.dl3);
+            if (dl1 !== null) ws.getCell(`H${r}`).value = dl1;
+            if (dl2 !== null) ws.getCell(`H${r + 1}`).value = dl2;
+            if (dl3 !== null) ws.getCell(`H${r + 2}`).value = dl3;
             // Patrón lecturas → col I
-            ws.getCell(`I${r}`).value = parseFloat(s.pt1) || 0;
-            ws.getCell(`I${r + 1}`).value = parseFloat(s.pt2) || 0;
-            ws.getCell(`I${r + 2}`).value = parseFloat(s.pt3) || 0;
+            const pt1 = safeParseFloat(s.pt1);
+            const pt2 = safeParseFloat(s.pt2);
+            const pt3 = safeParseFloat(s.pt3);
+            if (pt1 !== null) ws.getCell(`I${r}`).value = pt1;
+            if (pt2 !== null) ws.getCell(`I${r + 1}`).value = pt2;
+            if (pt3 !== null) ws.getCell(`I${r + 2}`).value = pt3;
 
             // Fórmulas en columnas J-N usando H e I para lecturas, y C/K para parámetros
             ws.getCell(`J${r}`).value = { formula: `IF(ABS(AVERAGE(H${r}:H${r + 2})-AVERAGE(I${r}:I${r + 2}))<=$K$32,"Paso","Fallo")` };

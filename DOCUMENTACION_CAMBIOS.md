@@ -16,13 +16,13 @@ Se agregaron campos en el modal de edición para personalizar la información de
 Se implementó una sección que permite añadir/quitar instrumentos.
 - **Autocompletado Inteligente**: Al escribir el nombre de un instrumental, el sistema sugiere nombres basados en calibraciones anteriores.
 - **Auto-llenado**: Al seleccionar un instrumento sugerido, se completan automáticamente su **Marca, Modelo y N° de Serie**.
-- **Inyección en Excel**: Inicia en la **Fila 12** y soporta hasta 5 filas (hasta la 16) para evitar superposición.
+- **Inyección en Excel**: Inicia en la **Fila 12** y soporta hasta 4 filas (hasta la 15) para evitar superposición.
 - **Columnas:**
     - A: Nombre del instrumental
     - B: Marca
-    - C: Modelo
-    - D: N° de serie
-    - E: Fecha de calibración
+    - D: Modelo
+    - E: N° de serie
+    - F: Fecha de calibración
 
 ## 4. Lógica de Persistencia (IndexedDB)
 Los datos editados ya no se pierden al cerrar la sesión:
@@ -34,11 +34,13 @@ Los datos editados ya no se pierden al cerrar la sesión:
 
 ## 5. Mapeo de Celdas (Plantilla 2025)
 Mapeo exacto configurado en `app.js`:
-- `A5`: Nombre/Equipo
-- `D5`: Modelo
-- `A7`: N° de Serie
-- `D7`: Marca
-- `H5, H6, H7`: Ubicación
+- `A5`: Equipo (prefijo "Equipo: ")
+- `E5`: Modelo (prefijo "Modelo: ")
+- `A8`: N° de Serie (prefijo "N° serie: ")
+- `E8`: Marca (prefijo "Marca: ")
+- `H5`: Edificio
+- `H6`: Sector
+- `H7`: Ubicación Técnica
 - `H8`: Fecha Calibración
 - `H9`: Orden M
 - `H10`: Técnico Realizó
