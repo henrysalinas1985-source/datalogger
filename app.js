@@ -484,9 +484,7 @@ document.addEventListener('DOMContentLoaded', () => {
         block.dataset.startRow = startRow;
         block.style.cssText = 'border:1px solid #3a3a5c;border-radius:8px;padding:12px;margin-bottom:12px;background:#1a1a2e;';
         const eSensor = escapeHtml(saved.sensor || '');
-        const eUb1 = escapeHtml(saved.ub1 || '');
-        const eUb2 = escapeHtml(saved.ub2 || '');
-        const eUb3 = escapeHtml(saved.ub3 || '');
+        const eUb = escapeHtml(saved.ub || '');
         const eDl1 = escapeHtml(saved.dl1 || '');
         const eDl2 = escapeHtml(saved.dl2 || '');
         const eDl3 = escapeHtml(saved.dl3 || '');
@@ -500,19 +498,17 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
                 <div class="field-group"><label>N° Sensor / Serie (Col B)</label><input type="text" class="s-sensor" value="${eSensor}"></div>
+                <div class="field-group"><label>Ubicación (A${startRow})</label><input type="text" class="s-ub" value="${eUb}"></div>
             </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:4px;background:#2a2a4a;padding:6px;border-radius:4px;">
-                <div class="field-group"><label>Ubicación 1 (A${startRow})</label><input type="text" class="s-ub1" value="${eUb1}"></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:4px;background:#2a2a4a;padding:6px;border-radius:4px;">
                 <div class="field-group"><label>DL L1 (H${startRow})</label><input type="number" step="any" class="s-dl1" value="${eDl1}"></div>
                 <div class="field-group"><label>Patrón L1 (I${startRow})</label><input type="number" step="any" class="s-pt1" value="${ePt1}"></div>
             </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:4px;background:#2a2a4a;padding:6px;border-radius:4px;">
-                <div class="field-group"><label>Ubicación 2 (A${startRow + 1})</label><input type="text" class="s-ub2" value="${eUb2}"></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:4px;background:#2a2a4a;padding:6px;border-radius:4px;">
                 <div class="field-group"><label>DL L2 (H${startRow + 1})</label><input type="number" step="any" class="s-dl2" value="${eDl2}"></div>
                 <div class="field-group"><label>Patrón L2 (I${startRow + 1})</label><input type="number" step="any" class="s-pt2" value="${ePt2}"></div>
             </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;background:#2a2a4a;padding:6px;border-radius:4px;">
-                <div class="field-group"><label>Ubicación 3 (A${startRow + 2})</label><input type="text" class="s-ub3" value="${eUb3}"></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;background:#2a2a4a;padding:6px;border-radius:4px;">
                 <div class="field-group"><label>DL L3 (H${startRow + 2})</label><input type="number" step="any" class="s-dl3" value="${eDl3}"></div>
                 <div class="field-group"><label>Patrón L3 (I${startRow + 2})</label><input type="number" step="any" class="s-pt3" value="${ePt3}"></div>
             </div>
@@ -550,9 +546,7 @@ document.addEventListener('DOMContentLoaded', () => {
             sensors.push({
                 startRow: parseInt(block.dataset.startRow),
                 sensor: block.querySelector('.s-sensor')?.value || '',
-                ub1: block.querySelector('.s-ub1')?.value || '',
-                ub2: block.querySelector('.s-ub2')?.value || '',
-                ub3: block.querySelector('.s-ub3')?.value || '',
+                ub: block.querySelector('.s-ub')?.value || '',
                 dl1: block.querySelector('.s-dl1')?.value || '',
                 dl2: block.querySelector('.s-dl2')?.value || '',
                 dl3: block.querySelector('.s-dl3')?.value || '',
@@ -840,10 +834,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const sensors = (d.inspections || {})['_sensors'] || [];
         sensors.forEach(s => {
             const r = s.startRow; // startRow = 43, 46, 49 ...
-            // Ubicación (col A, 3 filas)
-            ws.getCell(`A${r}`).value = s.ub1 || '';
-            ws.getCell(`A${r + 1}`).value = s.ub2 || '';
-            ws.getCell(`A${r + 2}`).value = s.ub3 || '';
+            // Ubicación (col A, solo 1 fila según requerimiento para Mondis)
+            ws.getCell(`A${r}`).value = s.ub || '';
             // Sensor/Serie (col B, solo primera fila del bloque)
             ws.getCell(`B${r}`).value = s.sensor || '';
 
