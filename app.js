@@ -8,6 +8,23 @@ document.addEventListener('DOMContentLoaded', () => {
     let savedTemplates = [];
     let selectedSerieForEdit = null;
 
+    // === PLANTILLAS FIJAS ===
+    const FIXED_DATA_TEMPLATES = {
+        'farmacia_csl': {
+            name: 'Farmacia CSL',
+            sensors: [
+                { ub: 'Ambiente BACK UP Farmacia', sensor: '6045135469' },
+                { ub: 'Ambiente Farmacia', sensor: '6045135470' },
+                { ub: 'Freezer Farmacia', sensor: '6045135471' },
+                { ub: 'Heladera 1 Farmacia', sensor: '6045135233' },
+                { ub: 'Heladera 2 Farmacia', sensor: '6045135232' }
+            ],
+            instruments: [
+                { name: 'Termómetro', brand: 'Madgetech', model: 'OctTemp2000', serie: 'P93230', date: '' }
+            ]
+        }
+    };
+
     // === SCHEMA EXACTO DEL EXCEL DATALOGGER.xlsx ===
     // 8.1 Test de Inspección y Funcionalidad — resultado va en col C, filas 24-29
     const SCHEMA_81 = [
@@ -576,6 +593,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const tx = db.transaction('templates', 'readonly');
         savedTemplates = await new Promise(r => { const q = tx.objectStore('templates').getAll(); q.onsuccess = () => r(q.result); });
         templateSelector.innerHTML = '<option value="">-- Seleccionar Plantilla --</option>';
+        
+        // Agregar Plantillas Fijas
+        Object.entries(FIXED_DATA_TEMPLATES).forEach(([id, t]) => {
+            const o = document.createElement('option'); o.value = id; o.textContent = `⭐ ${t.name} (Fija)`; templateSelector.appendChild(o);
+        });
+
         savedTemplates.forEach(t => { const o = document.createElement('option'); o.value = t.id; o.textContent = t.name; templateSelector.appendChild(o); });
     }
 
@@ -584,6 +607,22 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('dropZone').addEventListener('click', () => fileInput.click());
         sheetSelector.addEventListener('change', e => { currentClinic = e.target.value; renderTable(); });
         serieFilter.addEventListener('input', renderTable);
+
+        templateSelector.addEventListener('change', e => {
+            const val = e.target.value;
+            if (FIXED_DATA_TEMPLATES[val]) {
+                const tmpl = FIXED_DATA_TEMPLATES[val];
+                const container = document.getElementById('sensorsContainer');
+                container.innerHTML = '';
+                tmpl.sensors.forEach((s, i) => addSensorBlock(container, i, s));
+
+                const instContainer = document.getElementById('instrumentsContainer');
+                instContainer.innerHTML = '';
+                if (tmpl.instruments) {
+                    tmpl.instruments.forEach(inst => createInstrumentRow(inst));
+                }
+            }
+        });
 
         certFileInput.addEventListener('change', async e => {
             const file = e.target.files[0]; if (!file) return;
