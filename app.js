@@ -428,7 +428,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="inspection-label"><strong>${item.code}</strong> ${item.label}</div>
                 <div class="inspection-options" data-label="${item.label}" data-type="choice" data-row="${item.row}" data-col="C">
                     <div class="inspection-opt ${saved_val === 'P' ? 'selected' : ''}" data-val="P">P</div>
-                    <div class="inspection-opt ${saved_val === 'NP' ? 'selected' : ''}" data-val="NP" style="background:${saved_val === 'NP' ? '#e53e3e' : ''}">NP</div>
+                    <div class="inspection-opt ${saved_val === 'NP' ? 'selected' : ''}" data-val="NP">NP</div>
                     <div class="inspection-opt ${saved_val === 'na' ? 'selected' : ''}" data-val="na">NA</div>
                 </div>`;
             wireChoiceOpts(rowEl);
@@ -501,7 +501,6 @@ document.addEventListener('DOMContentLoaded', () => {
         block.className = 'sensor-block';
         block.dataset.index = index;
         block.dataset.startRow = startRow;
-        block.style.cssText = 'border:1px solid #3a3a5c;border-radius:8px;padding:12px;margin-bottom:12px;background:#1a1a2e;';
         const eSensor = escapeHtml(saved.sensor || '');
         const eUb = escapeHtml(saved.ub || '');
         const eDl1 = escapeHtml(saved.dl1 || '');
@@ -512,24 +511,20 @@ document.addEventListener('DOMContentLoaded', () => {
         const ePt3 = escapeHtml(saved.pt3 || '');
         block.innerHTML = `
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-                <strong style="color:#7c83fd;">Sensor ${index + 1} (filas ${startRow}-${startRow + 2})</strong>
-                ${index > 0 ? `<button type="button" class="remove-sensor btn btn-small" style="background:#e53e3e">× Quitar</button>` : ''}
+                <strong style="color:var(--accent);">Sensor ${index + 1} (F<sup>as</sup> ${startRow}-${startRow + 2})</strong>
+                ${index > 0 ? `<button type="button" class="remove-sensor btn btn-small" style="background:var(--danger);color:#fff;border:none;">× Quitar</button>` : ''}
             </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
-                <div class="field-group"><label>N° Sensor / Serie (Col B)</label><input type="text" class="s-sensor" value="${eSensor}"></div>
-                <div class="field-group"><label>Ubicación (A${startRow})</label><input type="text" class="s-ub" value="${eUb}"></div>
+            <div class="sensor-grid-2">
+                <div class="input-group"><label>N° Sensor / Serie (Col B)</label><input type="text" class="s-sensor" value="${eSensor}"></div>
+                <div class="input-group"><label>Ubicación (A${startRow})</label><input type="text" class="s-ub" value="${eUb}"></div>
             </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:4px;background:#2a2a4a;padding:6px;border-radius:4px;">
-                <div class="field-group"><label>DL L1 (H${startRow})</label><input type="number" step="any" class="s-dl1" value="${eDl1}"></div>
-                <div class="field-group"><label>Patrón L1 (I${startRow})</label><input type="number" step="any" class="s-pt1" value="${ePt1}"></div>
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:4px;background:#2a2a4a;padding:6px;border-radius:4px;">
-                <div class="field-group"><label>DL L2 (H${startRow + 1})</label><input type="number" step="any" class="s-dl2" value="${eDl2}"></div>
-                <div class="field-group"><label>Patrón L2 (I${startRow + 1})</label><input type="number" step="any" class="s-pt2" value="${ePt2}"></div>
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;background:#2a2a4a;padding:6px;border-radius:4px;">
-                <div class="field-group"><label>DL L3 (H${startRow + 2})</label><input type="number" step="any" class="s-dl3" value="${eDl3}"></div>
-                <div class="field-group"><label>Patrón L3 (I${startRow + 2})</label><input type="number" step="any" class="s-pt3" value="${ePt3}"></div>
+            <div class="sensor-grid-2" style="background:rgba(0,0,0,0.2);padding:10px;border-radius:8px;margin-bottom:10px;">
+                <div class="input-group"><label>DL L1 (H${startRow})</label><input type="number" step="any" class="s-dl1" value="${eDl1}"></div>
+                <div class="input-group"><label>Patrón L1 (I${startRow})</label><input type="number" step="any" class="s-pt1" value="${ePt1}"></div>
+                <div class="input-group"><label>DL L2 (H${startRow + 1})</label><input type="number" step="any" class="s-dl2" value="${eDl2}"></div>
+                <div class="input-group"><label>Patrón L2 (I${startRow + 1})</label><input type="number" step="any" class="s-pt2" value="${ePt2}"></div>
+                <div class="input-group"><label>DL L3 (H${startRow + 2})</label><input type="number" step="any" class="s-dl3" value="${eDl3}"></div>
+                <div class="input-group"><label>Patrón L3 (I${startRow + 2})</label><input type="number" step="any" class="s-pt3" value="${ePt3}"></div>
             </div>
         `;
         if (index > 0) block.querySelector('.remove-sensor').onclick = () => block.remove();
@@ -539,12 +534,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function wireChoiceOpts(rowEl) {
         rowEl.querySelectorAll('.inspection-opt').forEach(opt => {
             opt.onclick = () => {
-                rowEl.querySelectorAll('.inspection-opt').forEach(o => {
-                    o.classList.remove('selected');
-                    if (o.dataset.val === 'NP') o.style.background = '';
-                });
+                rowEl.querySelectorAll('.inspection-opt').forEach(o => o.classList.remove('selected'));
                 opt.classList.add('selected');
-                if (opt.dataset.val === 'NP') opt.style.background = '#e53e3e';
             };
         });
     }
@@ -895,8 +886,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (pt2 !== null) ws.getCell(`I${r + 1}`).value = pt2;
             if (pt3 !== null) ws.getCell(`I${r + 2}`).value = pt3;
 
-            // Fórmulas en columnas J-N usando H e I para lecturas, y C/K para parámetros
-            ws.getCell(`J${r}`).value = { formula: `IF(ABS(AVERAGE(H${r}:H${r + 2})-AVERAGE(I${r}:I${r + 2}))<=$K$32,"Paso","Fallo")` };
+            // Fórmulas en columnas J-N usando H e I para lecturas, y I38 para parámetros (Error Permitido)
+            ws.getCell(`J${r}`).value = { formula: `IF(ABS(AVERAGE(H${r}:H${r + 2})-AVERAGE(I${r}:I${r + 2}))<=$I$38,"Paso","Fallo")` };
             // Fórmula Uc (restaurada a $I$34, $I$40, $I$32 para coincidir exactamente con el cálculo matemático original de 2.2608)
             ws.getCell(`K${r}`).value = { formula: `2*SQRT(_xlfn.STDEV.S(H${r}:H${r + 2})^2+_xlfn.STDEV.S(I${r}:I${r + 2})^2+0.084*$I$34^2+0.084*$I$40^2+0.25*$I$32^2)` };
             ws.getCell(`L${r}`).value = { formula: `ABS(AVERAGE(H${r}:H${r + 2})-AVERAGE(I${r}:I${r + 2}))` };

@@ -27,8 +27,9 @@ body {
 }
 
 .container {
-    max-width: 1000px;
+    max-width: 1100px;
     margin: 0 auto;
+    width: 100%;
 }
 
 header {
@@ -234,11 +235,10 @@ th {
 .modal {
     background: var(--bg-main);
     border: 1px solid var(--border);
-    padding: 40px;
+    padding: 30px;
     border-radius: 24px;
     width: 100%;
-    max-width: 850px;
-    /* Un poco más ancho para mejor balance */
+    max-width: 900px;
     margin: 0 auto;
     position: relative;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
@@ -490,17 +490,20 @@ th {
     color: #fff;
 }
 
+.inspection-opt.selected[data-val="P"],
 .inspection-opt.selected[data-val="si"] {
     background: var(--success);
     color: #000;
 }
 
+.inspection-opt.selected[data-val="NP"],
 .inspection-opt.selected[data-val="no"] {
     background: var(--danger);
     color: #fff;
 }
 
-.inspection-opt.selected[data-val="na"] {
+.inspection-opt.selected[data-val="na"],
+.inspection-opt.selected[data-val="NA"] {
     background: #555;
     color: #fff;
 }
@@ -538,6 +541,61 @@ th {
     background: var(--accent);
     color: #000;
     border-color: var(--accent);
+}
+
+@media (max-width: 768px) {
+    body { padding: 10px; }
+    
+    .container { width: 98%; }
+
+    .filters-grid,
+    .summary-card,
+    .input-grid,
+    .instrument-item {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+
+    .modal {
+        padding: 20px 15px;
+        border-radius: 16px;
+    }
+
+    .inspection-row {
+        grid-template-columns: 1fr;
+        gap: 10px;
+        padding: 15px;
+    }
+
+    .inspection-options {
+        width: 100%;
+    }
+
+    .instrument-item .full-width {
+        grid-column: span 1;
+    }
+}
+
+/* Clases para los bloques de sensores (reemplazando inline styles) */
+.sensor-block {
+    border: 1px solid #3a3a5c;
+    border-radius: 12px;
+    padding: 15px;
+    margin-bottom: 20px;
+    background: rgba(255,255,255,0.02);
+}
+
+.sensor-grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+@media (max-width: 500px) {
+    .sensor-grid-2 {
+        grid-template-columns: 1fr;
+    }
 }
 
 @media (max-width: 600px) {
